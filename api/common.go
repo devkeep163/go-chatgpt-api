@@ -46,7 +46,7 @@ const (
 	EmailKey                       = "email"
 	AccountDeactivatedErrorMessage = "account %s is deactivated"
 
-	ReadyHint = "service go-chatgpt-api is ready"
+	ReadyHint = "hello, world"
 
 	refreshPuidErrorMessage = "failed to refresh PUID"
 	refreshOaididErrorMessage = "failed to refresh oai-did"
