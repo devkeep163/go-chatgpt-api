@@ -1,4 +1,3 @@
 .env
 go-chatgpt-api
 __debug*
-chat.openai.com.har
