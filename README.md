@@ -1,8 +1,22 @@
 # go-chatgpt-api
 
 # 此为个人维护的魔改版，相比原版，有以下改动/区别
-Docker image: maxduke/go-chatgpt-api
+Docker image: maxduke/go-chatgpt-api:latest
 
+## 20240506
+调整POW以及更新部分接口域名
+
+参照 https://github.com/xqdoo00o/ChatGPT-to-API/compare/2b6ea6e2208f11fbdf760ba23c1f704993901242...85aafb4cd9af1ed09e2120abc9bdae42bbacd271
+
+## 20240503
+后续计划移除imitate相关接口，有chat2api的需求的建议使用熊猫大佬的项目：
+
+https://github.com/xqdoo00o/ChatGPT-to-API
+
+## 20240501
+调整chatrequirement以及pow算法
+
+参照 https://github.com/xqdoo00o/ChatGPT-to-API/compare/d26911c672c9b0ce3c7928fec1109ff8539a34c1...89a038c3ca32bdbfdfcd2eff730aaaa9ff80ac7f
 ## 20240426
 默认关闭 healthcheck, 如需要开启请配置新的环境变量
   - ENABLE_HEALTHCHECK

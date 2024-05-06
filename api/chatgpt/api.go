@@ -11,14 +11,22 @@ import (
 	"io"
 	"log"
 	"math/rand"
+	"net"
 	http2 "net/http"
+	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
 	http "github.com/bogdanfinn/fhttp"
+	"github.com/bogdanfinn/tls-client/profiles"
+	tls "github.com/bogdanfinn/utls"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/PuerkitoBio/goquery"
 	"golang.org/x/crypto/sha3"
+	"golang.org/x/net/proxy"
 
 	"github.com/maxduke/go-chatgpt-api/api"
 	"github.com/linweiyuan/go-logger/logger"
@@ -26,11 +34,23 @@ import (
 
 var (
 	answers             = map[string]string{}
-	cores               = []int{8, 12, 16, 24}
-	screens             = []int{3000, 4000, 6000}
 	timeLocation, _     = time.LoadLocation("Asia/Shanghai")
 	timeLayout          = "Mon Jan 2 2006 15:04:05"
+	cachedHardware = 0
+	cachedScripts       = []string{}
+	cachedDpl           = ""
+	cachedRequireProof = ""
 )
+
+func init() {
+	cores := []int{8, 12, 16, 24}
+	screens := []int{3000, 4000, 6000}
+	rand.New(rand.NewSource(time.Now().UnixNano()))
+	core := cores[rand.Intn(4)]
+	rand.New(rand.NewSource(time.Now().UnixNano()))
+	screen := screens[rand.Intn(3)]
+	cachedHardware = core + screen
+}
 
 func CreateConversation(c *gin.Context) {
 	var request CreateConversationRequest
@@ -79,7 +99,7 @@ func CreateConversation(c *gin.Context) {
 
 	var proofToken string
 	if chat_require.Proof.Required {
-		proofToken = CalcProofToken(chat_require.Proof.Seed, chat_require.Proof.Difficulty)
+		proofToken = CalcProofToken(chat_require)
 	}
 
 	resp, done := sendConversationRequest(c, request, authHeader, api.OAIDID, chat_require.Token, proofToken)
@@ -105,6 +125,8 @@ func sendConversationRequest(c *gin.Context, request CreateConversationRequest, 
 	if proofToken != "" {
 		req.Header.Set("Openai-Sentinel-Proof-Token", proofToken)
 	}
+	req.Header.Set("Origin", "https://chat.openai.com")
+	req.Header.Set("Referer", "https://chat.openai.com/c/"+request.ConversationID)
 	resp, err := api.Client.Do(req)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, api.ReturnMessage(err.Error()))
@@ -278,6 +300,7 @@ func handleConversationResponse(c *gin.Context, resp *http.Response, request Cre
 			Action:          actionContinue,
 			ParentMessageID: continueParentMessageID,
 			ConversationID:  continueConversationID,
+			WebsocketRequestId: uuid.NewString(),
 		}
 		RenewTokenForRequest(&continueConversationRequest, dx)
 		resp, done := sendConversationRequest(c, continueConversationRequest, accessToken, deviceId, chat_token, proofToken)
@@ -341,17 +364,40 @@ func getWSURL(token string, deviceId string, retry int) (string, error) {
 	return WSSResp.WssUrl, nil
 }
 
-func CreateWSConn(url string, connInfo *api.ConnInfo, retry int) error {
-	dialer := websocket.DefaultDialer
+type rawDialer interface {
+	Dial(network string, addr string) (c net.Conn, err error)
+}
+
+func CreateWSConn(addr string, connInfo *api.ConnInfo, retry int) error {
+	dialer := websocket.Dialer{
+		HandshakeTimeout: 8 * time.Second,
+		NetDialTLSContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			host, _, _ := net.SplitHostPort(addr)
+			config := &tls.Config{ServerName: host, OmitEmptyPsk: true}
+			var rawDial rawDialer
+			if api.ProxyUrl != "" {
+				proxyURL, _ := url.Parse(api.ProxyUrl)
+				rawDial, _ = proxy.FromURL(proxyURL, proxy.Direct)
+			} else {
+				rawDial = &net.Dialer{}
+			}
+			dialConn, err := rawDial.Dial("tcp", addr)
+			if err != nil {
+				return nil, err
+			}
+			client := tls.UClient(dialConn, config, profiles.Okhttp4Android13.GetClientHelloId(), false, true)
+			return client, nil
+		},
+	}
 	dialer.EnableCompression = true
 	dialer.Subprotocols = []string{"json.reliable.webpubsub.azure.v1"}
-	conn, _, err := dialer.Dial(url, nil)
+	conn, _, err := dialer.Dial(addr, nil)
 	if err != nil {
 		if retry > 3 {
 			return err
 		}
 		time.Sleep(time.Second) // wait 1s to recreate w
-		return CreateWSConn(url, connInfo, retry+1)
+		return CreateWSConn(addr, connInfo, retry+1)
 	}
 	connInfo.Conn = conn
 	connInfo.Expire = time.Now().Add(time.Minute * 30)
@@ -415,7 +461,7 @@ func InitWSConn(token string, deviceId string, uuid string) error {
 		if err != nil {
 			return err
 		}
-		CreateWSConn(wssURL, connInfo, 0)
+		err = CreateWSConn(wssURL, connInfo, 0)
 		if err != nil {
 			return err
 		}
@@ -455,7 +501,10 @@ func InitWSConn(token string, deviceId string, uuid string) error {
 }
 
 func CheckRequire(access_token string, deviceId string) *ChatRequire {
-	body := bytes.NewBuffer([]byte(`{}`))
+	if cachedRequireProof == "" {
+		cachedRequireProof = "gAAAAAC" + generateAnswer(strconv.FormatFloat(rand.Float64(), 'f', -1, 64), "0")
+	}
+	body := bytes.NewBuffer([]byte(`{"p":"` + cachedRequireProof + `"}`))
 	var apiUrl string
 	apiUrl = "https://chat.openai.com/backend-api/sentinel/chat-requirements"
 	request, err := NewRequest(http.MethodPost, apiUrl, body, access_token, deviceId)
@@ -487,34 +536,70 @@ func getParseTime() string {
 	now = now.In(timeLocation)
 	return now.Format(timeLayout) + " GMT+0800 (中国标准时间)"
 }
-func getConfig() []interface{} {
-	rand.New(rand.NewSource(time.Now().UnixNano()))
-	core := cores[rand.Intn(4)]
-	rand.New(rand.NewSource(time.Now().UnixNano()))
-	screen := screens[rand.Intn(3)]
-	return []interface{}{core + screen, getParseTime(), int64(4294705152), 0, api.DefaultUserAgent}
-
-}
-func CalcProofToken(seed string, diff string) string {
-	if answers[seed] != "" {
-		return answers[seed]
+func GetDpl() {
+	if len(cachedScripts) > 0 {
+		return
 	}
+	request, err := http.NewRequest(http.MethodGet, "https://chatgpt.com/?oai-dm=1", nil)
+	request.Header.Set("User-Agent", api.UserAgent)
+	request.Header.Set("Accept", "*/*")
+	request.Header.Set("Cookie", "oai-dm-tgt-c-240329=2024-04-02")
+	if err != nil {
+		return
+	}
+	response, err := api.Client.Do(request)
+	if err != nil {
+		return
+	}
+	defer response.Body.Close()
+	doc, _ := goquery.NewDocumentFromReader(response.Body)
+	cachedScripts = nil
+	doc.Find("script[src]").Each(func(i int, s *goquery.Selection) {
+		src, exists := s.Attr("src")
+		if exists {
+			cachedScripts = append(cachedScripts, src)
+			if cachedDpl == "" {
+				idx := strings.Index(src, "dpl")
+				if idx >= 0 {
+					cachedDpl = src[idx:]
+				}
+			}
+		}
+	})
+	if len(cachedScripts) == 0 {
+		cachedScripts = append(cachedScripts, "https://cdn.oaistatic.com/_next/static/chunks/polyfills-78c92fac7aa8fdd8.js?dpl=baf36960d05dde6d8b941194fa4093fb5cb78c6a")
+		cachedDpl = "dpl=baf36960d05dde6d8b941194fa4093fb5cb78c6a"
+	}
+}
+func getConfig() []interface{} {	
+	rand.New(rand.NewSource(time.Now().UnixNano()))
+	script := cachedScripts[rand.Intn(len(cachedScripts))]
+	return []interface{}{cachedHardware, getParseTime(), int64(4294705152), 0, api.UserAgent, script, cachedDpl, "zh-CN", "zh-CN,en,en-GB,en-US", 0}
+}
+
+func CalcProofToken(require *ChatRequire) string {
+	proof := generateAnswer(require.Proof.Seed, require.Proof.Difficulty)
+	return "gAAAAAB" + proof
+}
+
+func generateAnswer(seed string, diff string) string {
+	GetDpl()
 	config := getConfig()
-	diffLen := len(diff) / 2
+	diffLen := len(diff)
 	hasher := sha3.New512()
-	for i := 0; i < 100000; i++ {
+	for i := 0; i < 500000; i++ {
 		config[3] = i
+		config[9] = (i + 2) / 2
 		json, _ := json.Marshal(config)
 		base := base64.StdEncoding.EncodeToString(json)
 		hasher.Write([]byte(seed + base))
 		hash := hasher.Sum(nil)
 		hasher.Reset()
-		if hex.EncodeToString(hash[:diffLen]) <= diff {
-			answers[seed] = "gAAAAAB" + base
-			return answers[seed]
+		if hex.EncodeToString(hash[:diffLen])[:diffLen] <= diff {
+			return base
 		}
 	}
-	return "gAAAAABwQ8Lk5FbGpA2NcR9dShT6gYjU7VxZ4D" + base64.StdEncoding.EncodeToString([]byte(`"`+seed+`"`))
+	return "wQ8Lk5FbGpA2NcR9dShT6gYjU7VxZ4D" + base64.StdEncoding.EncodeToString([]byte(`"`+seed+`"`))
 }
 
 func RenewTokenForRequest(request *CreateConversationRequest, dx string) {
