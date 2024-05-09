@@ -125,8 +125,8 @@ func sendConversationRequest(c *gin.Context, request CreateConversationRequest, 
 	if proofToken != "" {
 		req.Header.Set("Openai-Sentinel-Proof-Token", proofToken)
 	}
-	req.Header.Set("Origin", "https://chat.openai.com")
-	req.Header.Set("Referer", "https://chat.openai.com/c/"+request.ConversationID)
+	req.Header.Set("Origin", api.ChatGPTApiUrlPrefix)
+	req.Header.Set("Referer", api.ChatGPTApiUrlPrefix+"/c/"+request.ConversationID)
 	resp, err := api.Client.Do(req)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, api.ReturnMessage(err.Error()))
@@ -319,12 +319,12 @@ func NewRequest(method string, url string, body io.Reader, token string, deviceI
 	}
 	request.Header.Set("User-Agent", api.UserAgent)
 	request.Header.Set("Accept", "*/*")
-	request.Header.Set("Oai-Device-Id", deviceId)
 	if deviceId != "" {
 		request.Header.Set("Cookie", request.Header.Get("Cookie")+"oai-did="+deviceId+";")
 		request.Header.Set("Oai-Device-Id", deviceId)
 	}
 	request.Header.Set("Oai-Language", api.Language)
+	request.Header.Set("Cookie", request.Header.Get("Cookie")+"oai-dm-tgt-c-240329=2024-04-02;")
 	if token != "" {
 		request.Header.Set("Authorization", "Bearer "+token)
 	}
@@ -338,7 +338,7 @@ func NewRequest(method string, url string, body io.Reader, token string, deviceI
 }
 
 func getWSURL(token string, deviceId string, retry int) (string, error) {
-	request, err := NewRequest(http.MethodPost, "https://chat.openai.com/backend-api/register-websocket", nil, token, deviceId)
+	request, err := NewRequest(http.MethodPost, api.ChatGPTApiUrlPrefix+"/backend-api/register-websocket", nil, token, deviceId)
 	if err != nil {
 		return "", err
 	}
@@ -506,7 +506,7 @@ func CheckRequire(access_token string, deviceId string) *ChatRequire {
 	}
 	body := bytes.NewBuffer([]byte(`{"p":"` + cachedRequireProof + `"}`))
 	var apiUrl string
-	apiUrl = "https://chat.openai.com/backend-api/sentinel/chat-requirements"
+	apiUrl = api.ChatGPTApiUrlPrefix+"/backend-api/sentinel/chat-requirements"
 	request, err := NewRequest(http.MethodPost, apiUrl, body, access_token, deviceId)
 	if err != nil {
 		return nil
@@ -540,10 +540,11 @@ func GetDpl() {
 	if len(cachedScripts) > 0 {
 		return
 	}
+	cachedScripts = append(cachedScripts, "https://cdn.oaistatic.com/_next/static/chunks/9598-0150caea9526d55d.js?dpl=abad631f183104e6c8a323392d7bc30b933c5c7c")
+	cachedDpl = "dpl=abad631f183104e6c8a323392d7bc30b933c5c7c"
 	request, err := http.NewRequest(http.MethodGet, "https://chatgpt.com/?oai-dm=1", nil)
 	request.Header.Set("User-Agent", api.UserAgent)
 	request.Header.Set("Accept", "*/*")
-	request.Header.Set("Cookie", "oai-dm-tgt-c-240329=2024-04-02")
 	if err != nil {
 		return
 	}
@@ -553,11 +554,11 @@ func GetDpl() {
 	}
 	defer response.Body.Close()
 	doc, _ := goquery.NewDocumentFromReader(response.Body)
-	cachedScripts = nil
+	scripts := []string{}
 	doc.Find("script[src]").Each(func(i int, s *goquery.Selection) {
 		src, exists := s.Attr("src")
 		if exists {
-			cachedScripts = append(cachedScripts, src)
+			scripts = append(scripts, src)
 			if cachedDpl == "" {
 				idx := strings.Index(src, "dpl")
 				if idx >= 0 {
@@ -566,9 +567,8 @@ func GetDpl() {
 			}
 		}
 	})
-	if len(cachedScripts) == 0 {
-		cachedScripts = append(cachedScripts, "https://cdn.oaistatic.com/_next/static/chunks/polyfills-78c92fac7aa8fdd8.js?dpl=baf36960d05dde6d8b941194fa4093fb5cb78c6a")
-		cachedDpl = "dpl=baf36960d05dde6d8b941194fa4093fb5cb78c6a"
+	if len(scripts) != 0 {
+		cachedScripts = scripts
 	}
 }
 func getConfig() []interface{} {	

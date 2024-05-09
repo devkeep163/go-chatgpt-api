@@ -196,6 +196,7 @@ func convertAPIRequest(api_request APIRequest, requireArk bool, dx string) (chat
 		// 		val := api_request.Model[12:]
 		// 		chatgpt_request.ConversationMode.Kind = "gizmo_interaction"
 		// 		chatgpt_request.ConversationMode.GizmoId = val
+		//      chatgpt_request.Model = "text-davinci-002-render-sha"
 		// 	}
 		// }
 	}
@@ -242,8 +243,8 @@ func sendConversationRequest(c *gin.Context, request chatgpt.CreateConversationR
 	if proofToken != "" {
 		req.Header.Set("Openai-Sentinel-Proof-Token", proofToken)
 	}
-	req.Header.Set("Origin", "https://chat.openai.com")
-	req.Header.Set("Referer", "https://chat.openai.com/c/"+request.ConversationID)
+	req.Header.Set("Origin", api.ChatGPTApiUrlPrefix)
+	req.Header.Set("Referer", api.ChatGPTApiUrlPrefix+"/c/"+request.ConversationID)
 	resp, err := api.Client.Do(req)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, api.ReturnMessage(err.Error()))
@@ -279,6 +280,7 @@ func GetImageSource(wg *sync.WaitGroup, url string, prompt string, token string,
 		request.Header.Set("Cookie", request.Header.Get("Cookie")+"oai-did="+api.OAIDID+";")
 		request.Header.Set("Oai-Device-Id", api.OAIDID)
 	}
+	request.Header.Set("Cookie", request.Header.Get("Cookie")+"oai-dm-tgt-c-240329=2024-04-02;")
 	request.Header.Set("User-Agent", api.UserAgent)
 	request.Header.Set("Accept", "*/*")
 	if token != "" {
@@ -316,10 +318,10 @@ func Handler(c *gin.Context, response *http.Response, token string, uuid string,
 	var original_response ChatGPTResponse
 	var isRole = true
 	var waitSource = false
-	var isEnd = false
 	var imgSource []string
 	var isWSS = false
 	var convId string
+	var msgId string
 	var respId string
 	var wssUrl string
 	var connInfo *api.ConnInfo
@@ -435,11 +437,18 @@ func Handler(c *gin.Context, response *http.Response, token string, uuid string,
 			if original_response.Message.Metadata.MessageType != "next" && original_response.Message.Metadata.MessageType != "continue" || !strings.HasSuffix(original_response.Message.Content.ContentType, "text") {
 				continue
 			}
+			if original_response.Message.Content.ContentType == "text" && original_response.Message.ID != msgId {
+				if msgId == "" && original_response.Message.Content.Parts[0].(string) == "" {
+					msgId = original_response.Message.ID
+				} else {
+					continue
+				}
+			}
 			if original_response.Message.EndTurn != nil {
 				if waitSource {
 					waitSource = false
 				}
-				isEnd = true
+				msgId = ""
 			}
 			if len(original_response.Message.Metadata.Citations) != 0 {
 				r := []rune(original_response.Message.Content.Parts[0].(string))
@@ -474,7 +483,7 @@ func Handler(c *gin.Context, response *http.Response, token string, uuid string,
 				continue
 			}
 			if original_response.Message.Content.ContentType == "multimodal_text" {
-				apiUrl := "https://chat.openai.com/backend-api/files/"
+				apiUrl := api.ChatGPTApiUrlPrefix+"/backend-api/files/"
 				FILES_REVERSE_PROXY := os.Getenv("FILES_REVERSE_PROXY")
 				if FILES_REVERSE_PROXY != "" {
 					apiUrl = FILES_REVERSE_PROXY
@@ -503,11 +512,7 @@ func Handler(c *gin.Context, response *http.Response, token string, uuid string,
 				response_string = ConvertToString(&original_response, &previous_text, isRole)
 			}
 			if response_string == "" {
-				if isEnd {
-					goto endProcess
-				} else {
-					continue
-				}
+				continue
 			}
 			if response_string == "【" {
 				waitSource = true
@@ -520,7 +525,6 @@ func Handler(c *gin.Context, response *http.Response, token string, uuid string,
 					return "", nil
 				}
 			}
-		endProcess:
 			// Flush the response writer buffer to ensure that the client receives each line as it's written
 			c.Writer.Flush()
 
@@ -530,12 +534,10 @@ func Handler(c *gin.Context, response *http.Response, token string, uuid string,
 				}
 				finish_reason = original_response.Message.Metadata.FinishDetails.Type
 			}
-			if isEnd {
+			} else {
 				if stream {
 					final_line := StopChunk(finish_reason)
 					c.Writer.WriteString("data: " + final_line.String() + "\n\n")
-				}
-				break
 			}
 		}
 	}
@@ -557,7 +559,7 @@ type urlAttr struct {
 }
 
 func getURLAttribution(access_token string, puid string, deviceId string, url string) string {
-	request, err := chatgpt.NewRequest(http.MethodPost, "https://chat.openai.com/backend-api/attributions", bytes.NewBuffer([]byte(`{"urls":["`+url+`"]}`)), access_token, deviceId)
+	request, err := chatgpt.NewRequest(http.MethodPost, api.ChatGPTApiUrlPrefix+"/backend-api/attributions", bytes.NewBuffer([]byte(`{"urls":["`+url+`"]}`)), access_token, deviceId)
 	if err != nil {
 		return ""
 	}
