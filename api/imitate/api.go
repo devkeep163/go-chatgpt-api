@@ -534,17 +534,25 @@ func Handler(c *gin.Context, response *http.Response, token string, uuid string,
 				}
 				finish_reason = original_response.Message.Metadata.FinishDetails.Type
 			}
-			} else {
-				if stream {
-					final_line := StopChunk(finish_reason)
-					c.Writer.WriteString("data: " + final_line.String() + "\n\n")
+		} else {
+			if stream {
+				final_line := StopChunk(finish_reason)
+				c.Writer.WriteString("data: " + final_line.String() + "\n\n")
+			}
+			if isWSS {
+				break
 			}
 		}
 	}
+	respText := strings.Join(imgSource, "")
+ 	if respText != "" {
+ 		respText += "\n"
+ 	}
+ 	respText += previous_text.Text
 	if !max_tokens {
-		return strings.Join(imgSource, "") + previous_text.Text, nil
+		return respText, nil
 	}
-	return strings.Join(imgSource, "") + previous_text.Text, &ContinueInfo{
+	return respText, &ContinueInfo{
 		ConversationID: original_response.ConversationID,
 		ParentID:       original_response.Message.ID,
 	}
