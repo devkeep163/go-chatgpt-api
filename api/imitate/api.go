@@ -134,6 +134,10 @@ func CreateChatCompletions(c *gin.Context) {
 		translated_request.Action = "continue"
 		translated_request.ConversationID = continue_info.ConversationID
 		translated_request.ParentMessageID = continue_info.ParentID
+		chat_require = chatgpt.CheckRequire(token, api.OAIDID)
+ 		if chat_require.Proof.Required {
+ 			proofToken = chatgpt.CalcProofToken(chat_require)
+ 		}
 		if chat_require.Arkose.Required {
 			chatgpt.RenewTokenForRequest(&translated_request, chat_require.Arkose.DX)
 		}
@@ -188,7 +192,11 @@ func convertAPIRequest(api_request APIRequest, requireArk bool, dx string) (chat
 		chatgpt_request.Model = "text-davinci-002-render-sha"
 	} else if strings.HasPrefix(api_request.Model, "gpt-4") {
 		api_version = 4
-		chatgpt_request.Model = "gpt-4"
+		if api_request.Model == "gpt-4o" {
+			chatgpt_request.Model = api_request.Model
+		} else {
+			chatgpt_request.Model = "gpt-4"
+		}		
 		// TODO support gpts
 		// if len(api_request.Model) > 12 {
 		// 	key := api_request.Model[6:11]
@@ -196,7 +204,6 @@ func convertAPIRequest(api_request APIRequest, requireArk bool, dx string) (chat
 		// 		val := api_request.Model[12:]
 		// 		chatgpt_request.ConversationMode.Kind = "gizmo_interaction"
 		// 		chatgpt_request.ConversationMode.GizmoId = val
-		//      chatgpt_request.Model = "text-davinci-002-render-sha"
 		// 	}
 		// }
 	}
