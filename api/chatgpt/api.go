@@ -60,6 +60,8 @@ func CreateConversation(c *gin.Context) {
 		return
 	}
 
+	fmt.Printf("Received request666: %+v\n", request)
+
 	if len(request.Messages) != 0 {
 		message := request.Messages[0]
 		if message.Author.Role == "" {
@@ -110,9 +112,6 @@ func CreateConversation(c *gin.Context) {
 func sendConversationRequest(c *gin.Context, request CreateConversationRequest, accessToken string, deviceId string, arkoseToken string,  chat_token string, proofToken string) (*http.Response, bool) {
 	apiUrl := api.ChatGPTApiUrlPrefix+"/backend-api/conversation"
 	jsonBytes, _ := json.Marshal(request)
-
-    // 打印序列化后的JSON数据
-    fmt.Println("Serialized JSON data:", string(jsonBytes))
 
 	req, err := NewRequest(http.MethodPost, apiUrl, bytes.NewReader(jsonBytes), accessToken, deviceId)
 	req.Header.Set("Content-Type", "application/json")
