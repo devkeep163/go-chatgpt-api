@@ -5,17 +5,24 @@ import (
 )
 
 type CreateConversationRequest struct {
-	Action                     string    `json:"action"`
-	Messages                   []Message `json:"messages,omitempty"`
-	Model                      string    `json:"model"`
-	ParentMessageID            string    `json:"parent_message_id,omitempty"`
-	ConversationID             string    `json:"conversation_id,omitempty"`
-	TimezoneOffsetMin          int       `json:"timezone_offset_min"`
-	ForceUseSse                bool      `json:"force_use_sse"`
-	HistoryAndTrainingDisabled bool      `json:"history_and_training_disabled"`
-	AutoContinue               bool      `json:"auto_continue"`
-	Suggestions                []string  `json:"suggestions"`
-	WebsocketRequestId         string    `json:"websocket_request_id"`
+	Action                     string    	`json:"action"`
+	Messages                   []Message 	`json:"messages,omitempty"`
+	Model                      string    	`json:"model"`
+	ParentMessageID            string    	`json:"parent_message_id,omitempty"`
+	ConversationID             string    	`json:"conversation_id,omitempty"`
+	TimezoneOffsetMin          int       	`json:"timezone_offset_min"`
+	ForceUseSse                bool      	`json:"force_use_sse"`
+	HistoryAndTrainingDisabled bool      	`json:"history_and_training_disabled"`
+	AutoContinue               bool      	`json:"auto_continue"`
+	Suggestions                []string  	`json:"suggestions"`
+	WebsocketRequestId         string    	`json:"websocket_request_id"`
+	aonversation_mode          interface{}  `json:"aonversation_mode,omitempty"`
+	PluginIDs                  []string  	`json:"plugin_ids,omitempty"`
+	PluginData                 interface{} 	`json:"plugin_data,omitempty"`
+	force_nulligen             bool      	`json:"force_nulligen,omitempty"`
+	force_paragen              bool      	`json:"force_paragen,omitempty"`
+	force_paragen_model_slug   string    	`json:"force_paragen_model_slug,omitempty"`
+	force_rate_limit           bool      	`json:"force_rate_limit,omitempty"`
 }
 
 func (c *CreateConversationRequest) AddMessage(role string, content string) {
@@ -36,6 +43,8 @@ type Message struct {
 
 type Author struct {
 	Role string `json:"role"`
+	Nane interface{} `json:"name,omitempty"`
+	Metadata interface{} `json:"metadata,omitempty"`
 }
 
 type Content struct {
