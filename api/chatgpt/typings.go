@@ -16,13 +16,13 @@ type CreateConversationRequest struct {
 	AutoContinue               bool      	`json:"auto_continue"`
 	Suggestions                []string  	`json:"suggestions"`
 	WebsocketRequestId         string    	`json:"websocket_request_id"`
-	aonversation_mode          interface{}  `json:"aonversation_mode,omitempty"`
+	Conversation_mode          interface{}  `json:"conversation_mode,omitempty"`
 	PluginIDs                  []string  	`json:"plugin_ids,omitempty"`
 	PluginData                 interface{} 	`json:"plugin_data,omitempty"`
-	force_nulligen             bool      	`json:"force_nulligen,omitempty"`
-	force_paragen              bool      	`json:"force_paragen,omitempty"`
-	force_paragen_model_slug   string    	`json:"force_paragen_model_slug,omitempty"`
-	force_rate_limit           bool      	`json:"force_rate_limit,omitempty"`
+	Force_nulligen             bool      	`json:"force_nulligen,omitempty"`
+	Force_paragen              bool      	`json:"force_paragen,omitempty"`
+	Force_paragen_model_slug   string    	`json:"force_paragen_model_slug,omitempty"`
+	Force_rate_limit           bool      	`json:"force_rate_limit,omitempty"`
 }
 
 func (c *CreateConversationRequest) AddMessage(role string, content string) {
