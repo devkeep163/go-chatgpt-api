@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"fmt"
 
 	http "github.com/bogdanfinn/fhttp"
 	"github.com/bogdanfinn/tls-client/profiles"
