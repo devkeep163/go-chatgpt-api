@@ -7,7 +7,6 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"io"
 	"log"
 	"math/rand"
@@ -54,7 +53,6 @@ func init() {
 
 func CreateConversation(c *gin.Context) {
 	var request CreateConversationRequest
-	var api_version int
 
 	if err := c.BindJSON(&request); err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, api.ReturnMessage(parseJsonErrorMessage))
@@ -74,12 +72,6 @@ func CreateConversation(c *gin.Context) {
 		request.Messages[0] = message
 	}
 
-	if strings.HasPrefix(request.Model, gpt4Model) {
-		api_version = 4
-	} else {
-		api_version = 3
-	}
-
 	// get accessToken
 	authHeader := c.GetHeader(api.AuthorizationHeader)
 	if strings.HasPrefix(authHeader, "Bearer") {
@@ -87,14 +79,15 @@ func CreateConversation(c *gin.Context) {
 	}
 	chat_require := CheckRequire(authHeader, api.OAIDID)
 
-	if chat_require.Arkose.Required == true && request.ArkoseToken == "" {
-		arkoseToken, err := api.GetArkoseToken(api_version, chat_require.Arkose.DX)
+	var arkoseToken string
+	arkoseToken = c.GetHeader(api.ArkoseTokenHeader)
+	if chat_require.Arkose.Required == true && arkoseToken == "" {
+		token, err := GetArkoseTokenForModel(request.Model, chat_require.Arkose.DX)
+		arkoseToken = token
 		if err != nil || arkoseToken == "" {
 			c.AbortWithStatusJSON(http.StatusForbidden, api.ReturnMessage(err.Error()))
 			return
 		}
-
-		request.ArkoseToken = arkoseToken
 	}
 
 	var proofToken string
@@ -102,7 +95,10 @@ func CreateConversation(c *gin.Context) {
 		proofToken = CalcProofToken(chat_require)
 	}
 
-	resp, done := sendConversationRequest(c, request, authHeader, api.OAIDID, chat_require.Token, proofToken)
+	// TEST: force to use SSE
+	request.ForceUseSse = true
+
+	resp, done := sendConversationRequest(c, request, authHeader, api.OAIDID, arkoseToken, chat_require.Token, proofToken)
 	if done {
 		return
 	}
@@ -110,14 +106,18 @@ func CreateConversation(c *gin.Context) {
 	handleConversationResponse(c, resp, request, authHeader, api.OAIDID)
 }
 
-func sendConversationRequest(c *gin.Context, request CreateConversationRequest, accessToken string, deviceId string, chat_token string, proofToken string) (*http.Response, bool) {
+func sendConversationRequest(c *gin.Context, request CreateConversationRequest, accessToken string, deviceId string, arkoseToken string,  chat_token string, proofToken string) (*http.Response, bool) {
 	apiUrl := api.ChatGPTApiUrlPrefix+"/backend-api/conversation"
 	jsonBytes, _ := json.Marshal(request)
+
+    // 打印序列化后的JSON数据
+    fmt.Println("Serialized JSON data:", string(jsonBytes))
+
 	req, err := NewRequest(http.MethodPost, apiUrl, bytes.NewReader(jsonBytes), accessToken, deviceId)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "text/event-stream")
-	if request.ArkoseToken != "" {
-		req.Header.Set("Openai-Sentinel-Arkose-Token", request.ArkoseToken)
+	if arkoseToken != "" {
+		req.Header.Set("Openai-Sentinel-Arkose-Token", arkoseToken)
 	}
 	if chat_token != "" {
 		req.Header.Set("Openai-Sentinel-Chat-Requirements-Token", chat_token)
@@ -126,7 +126,11 @@ func sendConversationRequest(c *gin.Context, request CreateConversationRequest, 
 		req.Header.Set("Openai-Sentinel-Proof-Token", proofToken)
 	}
 	req.Header.Set("Origin", api.ChatGPTApiUrlPrefix)
-	req.Header.Set("Referer", api.ChatGPTApiUrlPrefix+"/c/"+request.ConversationID)
+	if request.ConversationID != "" {
+		req.Header.Set("Referer", api.ChatGPTApiUrlPrefix+"/c/"+request.ConversationID)
+	} else {
+		req.Header.Set("Referer", api.ChatGPTApiUrlPrefix)
+	}	
 	resp, err := api.Client.Do(req)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, api.ReturnMessage(err.Error()))
@@ -164,6 +168,7 @@ func handleConversationResponse(c *gin.Context, resp *http.Response, request Cre
 	continueParentMessageID := ""
 	continueConversationID := ""
 
+	var arkoseToken string
 	var proofToken string
 
 	defer resp.Body.Close()
@@ -295,6 +300,7 @@ func handleConversationResponse(c *gin.Context, resp *http.Response, request Cre
 
 	if isMaxTokens && request.AutoContinue {
 		continueConversationRequest := CreateConversationRequest{
+			ForceUseSse:                request.ForceUseSse,
 			HistoryAndTrainingDisabled: request.HistoryAndTrainingDisabled,
 			Model:                      request.Model,
 			TimezoneOffsetMin:          request.TimezoneOffsetMin,
@@ -309,9 +315,14 @@ func handleConversationResponse(c *gin.Context, resp *http.Response, request Cre
  			proofToken = CalcProofToken(chat_require)
  		}
 		if chat_require.Arkose.Required {
-			RenewTokenForRequest(&continueConversationRequest, chat_require.Arkose.DX)
+			token, err := GetArkoseTokenForModel(continueConversationRequest.Model, chat_require.Arkose.DX)
+			arkoseToken = token
+			if err != nil || arkoseToken == "" {
+				c.AbortWithStatusJSON(http.StatusForbidden, api.ReturnMessage(err.Error()))
+				return
+			}
 		}
-		resp, done := sendConversationRequest(c, continueConversationRequest, accessToken, deviceId, chat_require.Token, proofToken)
+		resp, done := sendConversationRequest(c, continueConversationRequest, accessToken, deviceId, arkoseToken, chat_require.Token, proofToken)
 		if done {
 			return
 		}
@@ -582,7 +593,7 @@ func GetDpl() {
 func getConfig() []interface{} {	
 	rand.New(rand.NewSource(time.Now().UnixNano()))
 	script := cachedScripts[rand.Intn(len(cachedScripts))]
-	return []interface{}{cachedHardware, getParseTime(), int64(4294705152), 0, api.UserAgent, script, cachedDpl, "zh-CN", "zh-CN,en,en-GB,en-US", 0}
+	return []interface{}{cachedHardware, getParseTime(), int64(4294705152), 0, api.UserAgent, script, cachedDpl, api.Language, api.Language, 0, "webkitGetUserMedia−function webkitGetUserMedia() { [native code] }", "location", "ontransitionend"}
 }
 
 func CalcProofToken(require *ChatRequire) string {
@@ -610,17 +621,12 @@ func generateAnswer(seed string, diff string) string {
 	return "wQ8Lk5FbGpA2NcR9dShT6gYjU7VxZ4D" + base64.StdEncoding.EncodeToString([]byte(`"`+seed+`"`))
 }
 
-func RenewTokenForRequest(request *CreateConversationRequest, dx string) {
+func GetArkoseTokenForModel(model string, dx string) (string, error) {
 	var api_version int
-	if strings.HasPrefix(request.Model, "gpt-4") {
+	if strings.HasPrefix(model, "gpt-4") {
 		api_version = 4
 	} else {
 		api_version = 3
 	}
-	token, err := api.GetArkoseToken(api_version, dx)
-	if err == nil {
-		request.ArkoseToken = token
-	} else {
-		fmt.Println("Error getting Arkose token: ", err)
-	}
+	return api.GetArkoseToken(api_version, dx)
 }

@@ -10,13 +10,12 @@ type CreateConversationRequest struct {
 	Model                      string    `json:"model"`
 	ParentMessageID            string    `json:"parent_message_id,omitempty"`
 	ConversationID             string    `json:"conversation_id,omitempty"`
-	PluginIDs                  []string  `json:"plugin_ids"`
 	TimezoneOffsetMin          int       `json:"timezone_offset_min"`
-	ArkoseToken                string    `json:"arkose_token"`
+	ForceUseSse                bool      `json:"force_use_sse"`
 	HistoryAndTrainingDisabled bool      `json:"history_and_training_disabled"`
 	AutoContinue               bool      `json:"auto_continue"`
 	Suggestions                []string  `json:"suggestions"`
-	WebsocketRequestId         string `json:"websocket_request_id"`
+	WebsocketRequestId         string    `json:"websocket_request_id"`
 }
 
 func (c *CreateConversationRequest) AddMessage(role string, content string) {
