@@ -3,6 +3,18 @@
 # 此为个人维护的魔改版，相比原版，有以下改动/区别
 Docker image: maxduke/go-chatgpt-api:latest
 
+## 20240523
+- 调整POW算法
+- 增加环境变量
+  - HARDWARE - 整数型，CPU核心数+屏幕分辨率高度+屏幕分辨率宽度。 不填则随机
+  - POW_MAX_CALC_TIMES - 整数型，默认500000次。 CPU运算快的可以适当提高，减少403错误的概率
+
+## 20240522
+- 调整生成刷新 deviceID 逻辑
+- 增加log: POW difficulty
+- 更新POW算法 https://github.com/xqdoo00o/ChatGPT-to-API/commit/e69e3d8ab3de295eec7a73551fffdb3b9ce83b1b
+- 在conversation payload中添加了一些新的字段，跟官网同步
+
 ## 20240520
 - TEST: 尝试强制使用SSE，从而避免WSS的各种问题 （效果未知）
 - 从request payload中移除arkoseToken （现在官网只在request header中有）

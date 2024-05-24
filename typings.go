@@ -5,28 +5,24 @@ import (
 )
 
 type CreateConversationRequest struct {
-	Action                     string    `json:"action"`
-	ConversationID             string    `json:"conversation_id,omitempty"`
-	ConversationMode           ConvMode  `json:"conversation_mode"`
-	ForceNulligen              bool      `json:"force_nulligen"`
-	ForceParagen               bool      `json:"force_paragen"`
-	ForceParagenModelSlug      string    `json:"force_paragen_model_slug"`
-	ForceRateLimit             bool      `json:"force_rate_limit"`
-	ForceUseSse                bool      `json:"force_use_sse"`
-	HistoryAndTrainingDisabled bool      `json:"history_and_training_disabled"`
-	Messages                   []Message `json:"messages,omitempty"`
-	Model                      string    `json:"model"`
-	ParentMessageID            string    `json:"parent_message_id,omitempty"`
-	ResetRateLimits            bool      `json:"reset_rate_limits"`
-	Suggestions                []string  `json:"suggestions"`
-	TimezoneOffsetMin          int       `json:"timezone_offset_min"`
-	WebsocketRequestId         string    `json:"websocket_request_id"`
-	AutoContinue               bool      `json:"auto_continue"`
-}
-
-type ConvMode struct {
-	Kind    string `json:"kind"`
-	GizmoId string `json:"gizmo_id,omitempty"`
+	Action                     string    	`json:"action"`
+	Messages                   []Message 	`json:"messages,omitempty"`
+	Model                      string    	`json:"model"`
+	ParentMessageID            string    	`json:"parent_message_id,omitempty"`
+	ConversationID             string    	`json:"conversation_id,omitempty"`
+	TimezoneOffsetMin          int       	`json:"timezone_offset_min"`
+	ForceUseSse                bool      	`json:"force_use_sse"`
+	HistoryAndTrainingDisabled bool      	`json:"history_and_training_disabled"`
+	AutoContinue               bool      	`json:"auto_continue"`
+	Suggestions                []string  	`json:"suggestions"`
+	WebsocketRequestId         string    	`json:"websocket_request_id"`
+	Conversation_mode          interface{}  `json:"conversation_mode,omitempty"`
+	PluginIDs                  []string  	`json:"plugin_ids,omitempty"`
+	PluginData                 interface{} 	`json:"plugin_data,omitempty"`
+	Force_nulligen             bool      	`json:"force_nulligen,omitempty"`
+	Force_paragen              bool      	`json:"force_paragen,omitempty"`
+	Force_paragen_model_slug   string    	`json:"force_paragen_model_slug,omitempty"`
+	Force_rate_limit           bool      	`json:"force_rate_limit,omitempty"`
 }
 
 func (c *CreateConversationRequest) AddMessage(role string, content string) {
@@ -47,6 +43,8 @@ type Message struct {
 
 type Author struct {
 	Role string `json:"role"`
+	Nane interface{} `json:"name,omitempty"`
+	Metadata interface{} `json:"metadata,omitempty"`
 }
 
 type Content struct {

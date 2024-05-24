@@ -7,16 +7,17 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"math/rand"
 	"net"
 	http2 "net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
-	"fmt"
 
 	http "github.com/bogdanfinn/fhttp"
 	"github.com/bogdanfinn/tls-client/profiles"
@@ -40,6 +41,262 @@ var (
 	cachedScripts       = []string{}
 	cachedDpl           = ""
 	cachedRequireProof = ""
+
+	powMaxCalcTimes = 500000
+	navigatorKeys = []string{"hardwareConcurrency−16", "login−[object NavigatorLogin]","presentation−[object Presentation]","managed−[object NavigatorManagedData]"}
+	documentKeys = []string{"location"}
+	windowKeys = []string{
+		"window",
+		"self",
+		"document",
+		"name",
+		"location",
+		"customElements",
+		"history",
+		"navigation",
+		"locationbar",
+		"menubar",
+		"personalbar",
+		"scrollbars",
+		"statusbar",
+		"toolbar",
+		"status",
+		"closed",
+		"frames",
+		"length",
+		"top",
+		"opener",
+		"parent",
+		"frameElement",
+		"navigator",
+		"origin",
+		"external",
+		"screen",
+		"innerWidth",
+		"innerHeight",
+		"scrollX",
+		"pageXOffset",
+		"scrollY",
+		"pageYOffset",
+		"visualViewport",
+		"screenX",
+		"screenY",
+		"outerWidth",
+		"outerHeight",
+		"devicePixelRatio",
+		"clientInformation",
+		"screenLeft",
+		"screenTop",
+		"styleMedia",
+		"onsearch",
+		"isSecureContext",
+		"trustedTypes",
+		"performance",
+		"onappinstalled",
+		"onbeforeinstallprompt",
+		"crypto",
+		"indexedDB",
+		"sessionStorage",
+		"localStorage",
+		"onbeforexrselect",
+		"onabort",
+		"onbeforeinput",
+		"onbeforematch",
+		"onbeforetoggle",
+		"onblur",
+		"oncancel",
+		"oncanplay",
+		"oncanplaythrough",
+		"onchange",
+		"onclick",
+		"onclose",
+		"oncontentvisibilityautostatechange",
+		"oncontextlost",
+		"oncontextmenu",
+		"oncontextrestored",
+		"oncuechange",
+		"ondblclick",
+		"ondrag",
+		"ondragend",
+		"ondragenter",
+		"ondragleave",
+		"ondragover",
+		"ondragstart",
+		"ondrop",
+		"ondurationchange",
+		"onemptied",
+		"onended",
+		"onerror",
+		"onfocus",
+		"onformdata",
+		"oninput",
+		"oninvalid",
+		"onkeydown",
+		"onkeypress",
+		"onkeyup",
+		"onload",
+		"onloadeddata",
+		"onloadedmetadata",
+		"onloadstart",
+		"onmousedown",
+		"onmouseenter",
+		"onmouseleave",
+		"onmousemove",
+		"onmouseout",
+		"onmouseover",
+		"onmouseup",
+		"onmousewheel",
+		"onpause",
+		"onplay",
+		"onplaying",
+		"onprogress",
+		"onratechange",
+		"onreset",
+		"onresize",
+		"onscroll",
+		"onsecuritypolicyviolation",
+		"onseeked",
+		"onseeking",
+		"onselect",
+		"onslotchange",
+		"onstalled",
+		"onsubmit",
+		"onsuspend",
+		"ontimeupdate",
+		"ontoggle",
+		"onvolumechange",
+		"onwaiting",
+		"onwebkitanimationend",
+		"onwebkitanimationiteration",
+		"onwebkitanimationstart",
+		"onwebkittransitionend",
+		"onwheel",
+		"onauxclick",
+		"ongotpointercapture",
+		"onlostpointercapture",
+		"onpointerdown",
+		"onpointermove",
+		"onpointerrawupdate",
+		"onpointerup",
+		"onpointercancel",
+		"onpointerover",
+		"onpointerout",
+		"onpointerenter",
+		"onpointerleave",
+		"onselectstart",
+		"onselectionchange",
+		"onanimationend",
+		"onanimationiteration",
+		"onanimationstart",
+		"ontransitionrun",
+		"ontransitionstart",
+		"ontransitionend",
+		"ontransitioncancel",
+		"onafterprint",
+		"onbeforeprint",
+		"onbeforeunload",
+		"onhashchange",
+		"onlanguagechange",
+		"onmessage",
+		"onmessageerror",
+		"onoffline",
+		"ononline",
+		"onpagehide",
+		"onpageshow",
+		"onpopstate",
+		"onrejectionhandled",
+		"onstorage",
+		"onunhandledrejection",
+		"onunload",
+		"crossOriginIsolated",
+		"scheduler",
+		"alert",
+		"atob",
+		"blur",
+		"btoa",
+		"cancelAnimationFrame",
+		"cancelIdleCallback",
+		"captureEvents",
+		"clearInterval",
+		"clearTimeout",
+		"close",
+		"confirm",
+		"createImageBitmap",
+		"fetch",
+		"find",
+		"focus",
+		"getComputedStyle",
+		"getSelection",
+		"matchMedia",
+		"moveBy",
+		"moveTo",
+		"open",
+		"postMessage",
+		"print",
+		"prompt",
+		"queueMicrotask",
+		"releaseEvents",
+		"reportError",
+		"requestAnimationFrame",
+		"requestIdleCallback",
+		"resizeBy",
+		"resizeTo",
+		"scroll",
+		"scrollBy",
+		"scrollTo",
+		"setInterval",
+		"setTimeout",
+		"stop",
+		"structuredClone",
+		"webkitCancelAnimationFrame",
+		"webkitRequestAnimationFrame",
+		"chrome",
+		"caches",
+		"cookieStore",
+		"ondevicemotion",
+		"ondeviceorientation",
+		"ondeviceorientationabsolute",
+		"launchQueue",
+		"documentPictureInPicture",
+		"getScreenDetails",
+		"queryLocalFonts",
+		"showDirectoryPicker",
+		"showOpenFilePicker",
+		"showSaveFilePicker",
+		"originAgentCluster",
+		"onpageswap",
+		"onpagereveal",
+		"credentialless",
+		"speechSynthesis",
+		"onscrollend",
+		"webkitRequestFileSystem",
+		"webkitResolveLocalFileSystemURL",
+		"sendMsgToSolverCS",
+		"webpackChunk_N_E",
+		"__next_set_public_path__",
+		"next",
+		"__NEXT_DATA__",
+		"__SSG_MANIFEST_CB",
+		"__NEXT_P",
+		"_N_E",
+		"regeneratorRuntime",
+		"__REACT_INTL_CONTEXT__",
+		"DD_RUM",
+		"_",
+		"filterCSS",
+		"filterXSS",
+		"__SEGMENT_INSPECTOR__",
+		"__NEXT_PRELOADREADY",
+		"Intercom",
+		"__MIDDLEWARE_MATCHERS",
+		"__STATSIG_SDK__",
+		"__STATSIG_JS_SDK__",
+		"__STATSIG_RERENDER_OVERRIDE__",
+		"_oaiHandleSessionExpired",
+		"__BUILD_MANIFEST",
+		"__SSG_MANIFEST",
+		"__intercomAssignLocation",
+		"__intercomReloadLocation"}
 )
 
 func init() {
@@ -50,6 +307,27 @@ func init() {
 	rand.New(rand.NewSource(time.Now().UnixNano()))
 	screen := screens[rand.Intn(3)]
 	cachedHardware = core + screen
+	envHardware := os.Getenv("HARDWARE")
+	if envHardware != "" {
+		intValue, err := strconv.Atoi(envHardware)
+		if err != nil {
+			logger.Error(fmt.Sprintf("Error converting %s to integer: %v", envHardware, err))
+		} else {
+			cachedHardware = intValue
+			logger.Info(fmt.Sprintf("cachedHardware is set to : %d", cachedHardware))
+		}
+	}
+	powMaxCalcTimes := 500000
+	envPowMaxCalcTimes := os.Getenv("POW_MAX_CALC_TIMES")
+	if envPowMaxCalcTimes != "" {
+		intValue, err := strconv.Atoi(envPowMaxCalcTimes)
+		if err != nil {
+			logger.Error(fmt.Sprintf("Error converting %s to integer: %v", envPowMaxCalcTimes, err))
+		} else {
+			powMaxCalcTimes = intValue
+			logger.Info(fmt.Sprintf("PowMaxCalcTimes is set to : %d", powMaxCalcTimes))
+		}
+	}
 }
 
 func CreateConversation(c *gin.Context) {
@@ -59,8 +337,6 @@ func CreateConversation(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, api.ReturnMessage(parseJsonErrorMessage))
 		return
 	}
-
-	fmt.Printf("Received request666: %+v\n", request)
 
 	if len(request.Messages) != 0 {
 		message := request.Messages[0]
@@ -112,7 +388,6 @@ func CreateConversation(c *gin.Context) {
 func sendConversationRequest(c *gin.Context, request CreateConversationRequest, accessToken string, deviceId string, arkoseToken string,  chat_token string, proofToken string) (*http.Response, bool) {
 	apiUrl := api.ChatGPTApiUrlPrefix+"/backend-api/conversation"
 	jsonBytes, _ := json.Marshal(request)
-
 	req, err := NewRequest(http.MethodPost, apiUrl, bytes.NewReader(jsonBytes), accessToken, deviceId)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "text/event-stream")
@@ -129,7 +404,7 @@ func sendConversationRequest(c *gin.Context, request CreateConversationRequest, 
 	if request.ConversationID != "" {
 		req.Header.Set("Referer", api.ChatGPTApiUrlPrefix+"/c/"+request.ConversationID)
 	} else {
-		req.Header.Set("Referer", api.ChatGPTApiUrlPrefix)
+		req.Header.Set("Referer", api.ChatGPTApiUrlPrefix+"/")
 	}	
 	resp, err := api.Client.Do(req)
 	if err != nil {
@@ -300,9 +575,15 @@ func handleConversationResponse(c *gin.Context, resp *http.Response, request Cre
 
 	if isMaxTokens && request.AutoContinue {
 		continueConversationRequest := CreateConversationRequest{
+			ConversationMode:           request.ConversationMode,
+			ForceNulligen:              request.ForceNulligen,
+			ForceParagen:               request.ForceParagen,
+			ForceParagenModelSlug:      request.ForceParagenModelSlug,
+			ForceRateLimit:             request.ForceRateLimit,
 			ForceUseSse:                request.ForceUseSse,
 			HistoryAndTrainingDisabled: request.HistoryAndTrainingDisabled,
 			Model:                      request.Model,
+			ResetRateLimits:            request.ResetRateLimits,
 			TimezoneOffsetMin:          request.TimezoneOffsetMin,
 
 			Action:          actionContinue,
@@ -531,6 +812,8 @@ func CheckRequire(access_token string, deviceId string) *ChatRequire {
 		return nil
 	}
 	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Origin", api.ChatGPTApiUrlPrefix)
+	request.Header.Set("Referer", api.ChatGPTApiUrlPrefix+"/")
 	response, err := api.Client.Do(request)
 	if err != nil {
 		return nil
@@ -593,11 +876,22 @@ func GetDpl() {
 func getConfig() []interface{} {	
 	rand.New(rand.NewSource(time.Now().UnixNano()))
 	script := cachedScripts[rand.Intn(len(cachedScripts))]
-	return []interface{}{cachedHardware, getParseTime(), int64(4294705152), 0, api.UserAgent, script, cachedDpl, api.Language, api.Language, 0, "webkitGetUserMedia−function webkitGetUserMedia() { [native code] }", "location", "ontransitionend"}
+	timeNum := (float64(time.Since(api.StartTime).Nanoseconds()) + rand.Float64()) / 1e6
+	rand.New(rand.NewSource(time.Now().UnixNano()))
+	navigatorKey := navigatorKeys[rand.Intn(len(navigatorKeys))]
+	rand.New(rand.NewSource(time.Now().UnixNano()))
+	documentKey := documentKeys[rand.Intn(len(documentKeys))]
+	rand.New(rand.NewSource(time.Now().UnixNano()))
+	windowKey := windowKeys[rand.Intn(len(windowKeys))]
+	return []interface{}{cachedHardware, getParseTime(), int64(4294705152), 0, api.UserAgent, script, cachedDpl, api.Language, api.Language+","+api.Language[:2], 0, navigatorKey, documentKey, windowKey, timeNum}
 }
 
 func CalcProofToken(require *ChatRequire) string {
+    start := time.Now()
 	proof := generateAnswer(require.Proof.Seed, require.Proof.Difficulty)
+    elapsed := time.Since(start)
+    // POW logging
+	logger.Info(fmt.Sprintf("POW Difficulty: %s , took %v ms", require.Proof.Difficulty, elapsed.Milliseconds()))
 	return "gAAAAAB" + proof
 }
 
@@ -606,7 +900,7 @@ func generateAnswer(seed string, diff string) string {
 	config := getConfig()
 	diffLen := len(diff)
 	hasher := sha3.New512()
-	for i := 0; i < 500000; i++ {
+	for i := 0; i < powMaxCalcTimes; i++ {
 		config[3] = i
 		config[9] = (i + 2) / 2
 		json, _ := json.Marshal(config)
