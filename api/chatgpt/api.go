@@ -34,6 +34,7 @@ import (
 )
 
 var (
+	autoContinue bool
 	answers             = map[string]string{}
 	timeLocation, _     = time.LoadLocation("Asia/Shanghai")
 	timeLayout          = "Mon Jan 2 2006 15:04:05"
@@ -42,6 +43,8 @@ var (
 	cachedDpl           = ""
 	cachedRequireProof = ""
 
+	PowRetryTimes = 0
+	PowMaxDifficulty = "000032"
 	powMaxCalcTimes = 500000
 	navigatorKeys = []string{"hardwareConcurrency−16", "login−[object NavigatorLogin]","presentation−[object Presentation]","managed−[object NavigatorManagedData]"}
 	documentKeys = []string{"location"}
@@ -300,6 +303,7 @@ var (
 )
 
 func init() {
+	autoContinue = os.Getenv("AUTO_CONTINUE") == "true"
 	cores := []int{8, 12, 16, 24}
 	screens := []int{3000, 4000, 6000}
 	rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -317,7 +321,21 @@ func init() {
 			logger.Info(fmt.Sprintf("cachedHardware is set to : %d", cachedHardware))
 		}
 	}
-	powMaxCalcTimes := 500000
+	envPowRetryTimes := os.Getenv("POW_RETRY_TIMES")
+	if envPowRetryTimes != "" {
+		intValue, err := strconv.Atoi(envPowRetryTimes)
+		if err != nil {
+			logger.Error(fmt.Sprintf("Error converting %s to integer: %v", envPowRetryTimes, err))
+		} else {
+			PowRetryTimes = intValue
+			logger.Info(fmt.Sprintf("PowRetryTimes is set to : %d", PowRetryTimes))
+		}
+	}
+	envpowMaxDifficulty := os.Getenv("POW_MAX_DIFFICULTY")
+	if envpowMaxDifficulty != "" {
+		PowMaxDifficulty = envpowMaxDifficulty
+		logger.Info(fmt.Sprintf("PowMaxDifficulty is set to : %s", PowMaxDifficulty))
+	}
 	envPowMaxCalcTimes := os.Getenv("POW_MAX_CALC_TIMES")
 	if envPowMaxCalcTimes != "" {
 		intValue, err := strconv.Atoi(envPowMaxCalcTimes)
@@ -357,6 +375,14 @@ func CreateConversation(c *gin.Context) {
 		authHeader = strings.Replace(authHeader, "Bearer ", "", 1)
 	}
 	chat_require := CheckRequire(authHeader, api.OAIDID)
+	for i := 0; i < PowRetryTimes; i++ {		
+		if chat_require.Proof.Required && chat_require.Proof.Difficulty <= PowMaxDifficulty {
+			logger.Warn(fmt.Sprintf("Proof of work difficulty too high: %s. Retrying... %d/%d ", chat_require.Proof.Difficulty, i + 1, PowRetryTimes))
+			chat_require = CheckRequire(authHeader, api.OAIDID)
+		} else {
+			break
+		}
+	}
 
 	var arkoseToken string
 	arkoseToken = c.GetHeader(api.ArkoseTokenHeader)
@@ -552,7 +578,7 @@ func handleConversationResponse(c *gin.Context, resp *http.Response, request Cre
 			}
 
 			responseJson := line[6:]
-			if strings.HasPrefix(responseJson, "[DONE]") && isMaxTokens && request.AutoContinue {
+			if strings.HasPrefix(responseJson, "[DONE]") && isMaxTokens && autoContinue {
 				continue
 			}
 
@@ -573,7 +599,8 @@ func handleConversationResponse(c *gin.Context, resp *http.Response, request Cre
 		}
 	}
 
-	if isMaxTokens && request.AutoContinue {
+	if isMaxTokens && autoContinue {
+		logger.Info("Continuing conversation")
 		continueConversationRequest := CreateConversationRequest{
 			ConversationMode:           request.ConversationMode,
 			ForceNulligen:              request.ForceNulligen,
@@ -592,6 +619,14 @@ func handleConversationResponse(c *gin.Context, resp *http.Response, request Cre
 			WebsocketRequestId: uuid.NewString(),
 		}
 		chat_require := CheckRequire(accessToken, deviceId)
+		for i := 0; i < PowRetryTimes; i++ {		
+			if chat_require.Proof.Required && chat_require.Proof.Difficulty <= PowMaxDifficulty {
+				logger.Warn(fmt.Sprintf("Proof of work difficulty too high: %s. Retrying... %d/%d ", chat_require.Proof.Difficulty, i + 1, PowRetryTimes))
+				chat_require = CheckRequire(accessToken, api.OAIDID)
+			} else {
+				break
+			}
+		}
  		if chat_require.Proof.Required {
  			proofToken = CalcProofToken(chat_require)
  		}

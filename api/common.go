@@ -43,7 +43,7 @@ const (
 	EmailInvalidErrorMessage           = "email is not valid"
 	EmailOrPasswordInvalidErrorMessage = "email or password is not correct"
 	GetAccessTokenErrorMessage         = "failed to get access token"
-	defaultTimeoutSeconds              = 600 // 10 minutes
+	defaultTimeoutSeconds              = 30
 
 	EmailKey                       = "email"
 	AccountDeactivatedErrorMessage = "account %s is deactivated"
@@ -279,9 +279,18 @@ func setupIDs() {
 		IMITATE_accessToken = os.Getenv("IMITATE_ACCESS_TOKEN")
 	}
 
-	if OAIDID == "" && IMITATE_accessToken != "" {
+	if OAIDID == "" {
+		seed := uuid.NewString()
+		// get device id seed
+		if username != "" {
+			seed = username
+		} else if refreshtoken != "" {
+			seed = refreshtoken
+		} else if IMITATE_accessToken != "" {
+			seed = IMITATE_accessToken
+		}
 		// generate device id
-		OAIDID = uuid.NewSHA1(uuid.MustParse("12345678-1234-5678-1234-567812345678"), []byte(IMITATE_accessToken)).String()
+		OAIDID = uuid.NewSHA1(uuid.MustParse("12345678-1234-5678-1234-567812345678"), []byte(seed)).String()
 	}
 }
 
