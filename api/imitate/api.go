@@ -85,10 +85,18 @@ func CreateChatCompletions(c *gin.Context) {
 	go func() {
 		defer wg.Done()
 		chat_require = chatgpt.CheckRequire(token, api.OAIDID)
+		if chat_require == nil {
+			c.JSON(500, gin.H{"error": "unable to check chat requirement"})
+			return
+		}
 		for i := 0; i < chatgpt.PowRetryTimes; i++ {		
 			if chat_require.Proof.Required && chat_require.Proof.Difficulty <= chatgpt.PowMaxDifficulty {
 				logger.Warn(fmt.Sprintf("Proof of work difficulty too high: %s. Retrying... %d/%d ", chat_require.Proof.Difficulty, i + 1, chatgpt.PowRetryTimes))
 				chat_require = chatgpt.CheckRequire(token, api.OAIDID)
+				if chat_require == nil {
+					c.JSON(500, gin.H{"error": "unable to check chat requirement"})
+					return
+				}
 			} else {
 				break
 			}
@@ -154,10 +162,18 @@ func CreateChatCompletions(c *gin.Context) {
 		translated_request.ConversationID = continue_info.ConversationID
 		translated_request.ParentMessageID = continue_info.ParentID
 		chat_require = chatgpt.CheckRequire(token, api.OAIDID)
+		if chat_require == nil {
+			c.JSON(500, gin.H{"error": "unable to check chat requirement"})
+			return
+		}
 		for i := 0; i < chatgpt.PowRetryTimes; i++ {		
 			if chat_require.Proof.Required && chat_require.Proof.Difficulty <= chatgpt.PowMaxDifficulty {
 				logger.Warn(fmt.Sprintf("Proof of work difficulty too high: %s. Retrying... %d/%d ", chat_require.Proof.Difficulty, i + 1, chatgpt.PowRetryTimes))
 				chat_require = chatgpt.CheckRequire(token, api.OAIDID)
+				if chat_require == nil {
+					c.JSON(500, gin.H{"error": "unable to check chat requirement"})
+					return
+				}
 			} else {
 				break
 			}
@@ -306,7 +322,6 @@ func GetImageSource(wg *sync.WaitGroup, url string, prompt string, token string,
 		request.Header.Set("Cookie", request.Header.Get("Cookie")+"oai-did="+api.OAIDID+";")
 		request.Header.Set("Oai-Device-Id", api.OAIDID)
 	}
-	request.Header.Set("Cookie", request.Header.Get("Cookie")+"oai-dm-tgt-c-240329=2024-04-02;")
 	request.Header.Set("User-Agent", api.UserAgent)
 	request.Header.Set("Accept", "*/*")
 	if token != "" {
